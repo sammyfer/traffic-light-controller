@@ -22,11 +22,10 @@ ADD logs/ /scripts/logs
 
 # Instalando módulos
 WORKDIR /scripts/Mask_RCNN
-RUN pip3 install -r requirements.txt
 RUN python setup.py install
 
 RUN /usr/local/bin/python -m pip install --upgrade pip
-RUN pip3 install --default-timeout=300 requests numpy scipy Pillow cython matplotlib scikit-image==0.16.2 tensorflow-gpu==1.15.0 tensorflow==1.15.5 keras==2.1.6 opencv-python h5py imgaug IPython[all]
+RUN pip3 install --default-timeout=300 protobuf==3.20.* requests numpy scipy Pillow cython matplotlib scikit-image==0.16.2 tensorflow-gpu==1.15.0 tensorflow==1.15.5 keras==2.1.6 opencv-python h5py imgaug IPython[all]
 
 # Configurando usuário SSH
 RUN adduser --disabled-password --gecos "" ec2-user
