@@ -85,18 +85,23 @@ def initFtpClient():
     return ftp
 
 def downloadFile(ftpinfo, tl):
-    filename=ftpinfo['file']
-    with open(filename, "wb") as file:
-        # Command for Downloading the file "RETR filename"
-        ftpinfo['ftp'].retrbinary(f"RETR semaforo_{tl}/{filename}", file.write)
-    print(f'Baixado a imagem do semaforo {tl}')
-    server='ec2-18-230-151-174.sa-east-1.compute.amazonaws.com'
-    user='ec2-user'
-    key='/home/ec2-user/.ssh/default-key.pem'
-    container='nginx'
-    os.system(f'rsync -Pavq -e "ssh -i {key}" {filename} {user}@{server}:/home/{user}')
-    os.system(f'ssh -o StrictHostKeyChecking=no -i {key} {user}@{server} sudo docker cp /home/{user}/{filename} {container}:/usr/share/nginx/html/')
-    print("Imagem enviada para nginx")
+    try:
+        filename=ftpinfo['file']
+        with open(filename, "wb") as file:
+            # Command for Downloading the file "RETR filename"
+            ftpinfo['ftp'].retrbinary(f"RETR semaforo_{tl}/{filename}", file.write)
+        print(f'Baixado a imagem do semaforo {tl}')
+        server='ec2-18-230-151-174.sa-east-1.compute.amazonaws.com'
+        user='ec2-user'
+        key='/home/ec2-user/.ssh/default-key.pem'
+        container='nginx'
+        os.system(f'rsync -Pavq -e "ssh -i {key}" {filename} {user}@{server}:/home/{user}')
+        os.system(f'ssh -o StrictHostKeyChecking=no -i {key} {user}@{server} sudo docker cp /home/{user}/{filename} {container}:/usr/share/nginx/html/')
+        print("Imagem enviada para nginx")
+        return True
+    except Exception as e:
+        print("Erro no download da imagem: "+str(e))
+        return False
 
 def openTl(tl):
     print(f'Abrindo Semaforo {tl}')
@@ -143,24 +148,31 @@ def getClosedTl():
     return closedtl
 
 def recognizeImage(model, image_path):
-    img = skimage.io.imread(image_path)
-    img_arr = np.array(img)
-    results = model.detect([img_arr], verbose=1)
-    r = results[0]
-    return True if len(r.get("rois")) > 0 else False
+    try:
+        img = skimage.io.imread(image_path)
+        img_arr = np.array(img)
+        results = model.detect([img_arr], verbose=1)
+        r = results[0]
+        return True if len(r.get("rois")) > 0 else False
+    except Exception as e:
+        print("Erro ao analisar imagem.\n"+str(e))
+        return False
 
 
 if __name__ == '__main__':
-    model=initNeuralNetwork()
-    print("########## Model criado ##########")
-    ftp=initFtpClient()
-    print("########## FTP iniciado ##########")
-    img_path='imagem.jpg'
-    ftpinfo={'ftp': ftp, 'file': img_path}
-    while(True):
+    try:
+        model=initNeuralNetwork()
+        print("########## Model criado ##########")
+        ftp=initFtpClient()
+        print("########## FTP iniciado ##########")
+        img_path='imagem.jpg'
+        ftpinfo={'ftp': ftp, 'file': img_path}
+    except:
+        exit(2)
+    while True:
         print(getStatusTl())
         if(int(getStatusTl().get("cont")) == 0):
-            print("CONT É ZERO!!!!! INICIO DO LOOP")
+            print("CONTADOR É ZERO! INICIO DO LOOP")
             updateCont('20')
             openedTl=getOpenedTl()
             closedTl=getClosedTl()
@@ -169,32 +181,30 @@ if __name__ == '__main__':
             openTl(closedTl)
             print(getStatusTl())
         while int(getStatusTl().get("cont")) > 0:
-            print("CONT É MAIOR QUE ZERO!!!")
+            print("CONTADOR É MAIOR QUE ZERO!")
             closedTl=getClosedTl()
             print(f'SEMAFORO FECHADO: {str(closedTl)}')
-            print("BAIXANDO IMAGEM DO SEMAFORO"+str(closedTl))
-            downloadFile(ftpinfo, closedTl)
+            print("BAIXANDO IMAGEM DO SEMAFORO "+str(closedTl))
             recognitionResult=False
-            try:
+            downloadResponse=downloadFile(ftpinfo, closedTl)
+            if (downloadResponse):
                 recognitionResult=recognizeImage(model, img_path)
                 print("RESULTADO DA ANALISE: "+str(recognitionResult))
-            except Exception as e:
-                print(e)
             if recognitionResult:
-                print(f"TEM AMBULANCIA NO SEMAFORO {str(closedTl)}!!!!!!!!!!!!!")
+                print(f"TEM AMBULANCIA NO SEMAFORO {str(closedTl)}!")
                 openedTl=getOpenedTl()
                 closedTl=getClosedTl()
                 closeTl(openedTl)
                 openTl(closedTl)
                 print(f'SEMAFORO ABERTO: {str(openedTl)} - SEMAFORO FECHADO: {str(closedTl)}')
                 updateCont('20')
-            if(recognitionResult == False):
+            else:
                 print('Nenhuma ambulancia no trafego')
                 time.sleep(1)
                 if int(getStatusTl().get("cont")) > 0:
-                    print("CONT MAIOR QUE ZERO!!! DIMINUINDO O CONT")
+                    print("CONTADOR MAIOR QUE ZERO! DIMINUINDO O CONT")
                     updateCont(str(int(getStatusTl().get("cont")) - 1))
                 else:
-                    print("CONT É ZERO!!!!! FINAL DO LOOP")
+                    print("CONTADOR É ZERO! FINAL DO LOOP")
                     updateCont('0')
                 print(getStatusTl())
